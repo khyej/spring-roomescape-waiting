@@ -81,31 +81,31 @@ public class ReservationService {
             return ReservationResponse.from(reservation);
         }
 
-        ReservationTime time = getReservationTime(request.timeId());
         Theme theme = reservation.getTheme();
+        ReservationTime currentTime = reservation.getTime();
+        ReservationTime newTime = getReservationTime(request.timeId());
+
         LocalDate currentDate = reservation.getDate();
-        Long currentTimeId = reservation.getTime().getId();
         LocalDate newDate = request.date();
-        Long newTimeId = request.timeId();
 
         Reservations currentReservations;
         Reservations newReservations;
 
-        if (isBefore(currentDate, currentTimeId, newDate, newTimeId)) {
+        if (isBefore(currentDate, currentTime, newDate, newTime)) {
             currentReservations = reservationRepository.findByDateAndThemeAndTimeForUpdate(currentDate, theme.getId(),
-                    currentTimeId);
+                    currentTime.getId());
             newReservations = reservationRepository.findByDateAndThemeAndTimeForUpdate(newDate, theme.getId(),
-                    newTimeId);
+                    newTime.getId());
         } else {
             newReservations = reservationRepository.findByDateAndThemeAndTimeForUpdate(newDate, theme.getId(),
-                    newTimeId);
+                    newTime.getId());
             currentReservations = reservationRepository.findByDateAndThemeAndTimeForUpdate(currentDate, theme.getId(),
-                    currentTimeId);
+                    currentTime.getId());
         }
 
         newReservations.validateDuplicate(reservation.getName());
 
-        Reservation newReservation = buildUpdatedReservation(reservation, newDate, time, newReservations);
+        Reservation newReservation = buildUpdatedReservation(reservation, newDate, newTime, newReservations);
 
         return ReservationResponse.from(applyUpdate(id, reservation, currentReservations, newReservation));
     }
@@ -121,14 +121,22 @@ public class ReservationService {
         promoteNextWaiting(reservation, currentReservations);
     }
 
-    private boolean isBefore(LocalDate date1, Long timeId1, LocalDate date2, Long timeId2) {
+    private boolean isBefore(LocalDate date1, ReservationTime time1, LocalDate date2, ReservationTime time2) {
         if (date1.isBefore(date2)) {
             return true;
         }
         if (date1.isAfter(date2)) {
             return false;
         }
-        return timeId1 < timeId2;
+
+        if (time1.getStartAt().isBefore(time2.getStartAt())) {
+            return true;
+        }
+        if (time1.getStartAt().isAfter(time2.getStartAt())) {
+            return false;
+        }
+
+        return time1.getId() < time2.getId();
     }
 
     private Reservation buildUpdatedReservation(Reservation origin, LocalDate newDate, ReservationTime newTime,
